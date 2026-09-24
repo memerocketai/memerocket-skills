@@ -30,7 +30,7 @@ const HEADERS = { Accept: 'application/json', 'User-Agent': `memerocket-skill/${
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 const WINDOWS = ['7d', '30d', '90d'];
 const CATS = ['all', 'kol', 'smart', 'whale', 'arbiter'];
-const SORTS = ['pnl', 'winrate', 'copiers', 'earned'];
+const SORTS = ['total', 'pnl', 'winrate', 'copiers', 'earned']; // total = realized + open at live price (gateway default since 23-sep-2026)
 const GEM_KINDS = ['gems', 'fast'];
 const PERIODS = ['today', 'yesterday', '7d', '30d', 'all'];
 const LANGS = ['en', 'es', 'zh', 'pt'];
@@ -97,7 +97,7 @@ export const COMMANDS = {
     path: '/core/league' + qs({
       window: oneOf(options.window, WINDOWS, '--window', '7d'),
       cat: oneOf(options.cat, CATS, '--cat', 'all'),
-      sort: oneOf(options.sort, SORTS, '--sort', 'pnl'),
+      sort: oneOf(options.sort, SORTS, '--sort', 'total'),
       limit: bounded(options.limit, { min: 1, max: 100, fallback: 20 }, '--limit'),
       cursor: bounded(options.cursor, { min: 0, max: 100_000, fallback: undefined }, '--cursor'),
     }),
@@ -157,6 +157,33 @@ export async function call(url, { fetchImpl = fetch, timeoutMs = TIMEOUT_MS } = 
   return { ok: true, data: body, exitCode: 0 };
 }
 
+// ---- output hygiene: no upstream provider names, no infrastructure, stable English labels ----
+// The gateway is built for MemeRocket's own UI and carries internal provenance (which upstream sources fed a number,
+// which RPC answered). None of that is part of the skill's contract: agents reason on MemeRocket's numbers and keys.
+const DROP_KEYS = new Set(['sources', 'providers', 'provider', 'rpc', 'primary', 'source_provider', 'src_provider', 'method']);
+const PROVIDER_RE = /\b(goplus|honeypot\.is|moralis|chainstack|gmgn|dexscreener|dextools|coingecko|geckoterminal|bitquery|nodereal|quicknode|alchemy|ankr|etherscan|bscscan|public[0-9])\b/gi;
+const EN = new Map([
+  ['medido por nosotros en cadena', 'measured by MemeRocket on-chain'],
+  ['según el motor de flujo, sin verificar', 'from the flow engine, unverified'],
+  ['solo los tokens que MemeRocket vigila, desde que empezó a vigilarlos', 'only the tokens MemeRocket watches, since it started watching them'],
+  ['todas las operaciones de las wallets de la liga', 'every trade of the league wallets'],
+  ['wallet sin operaciones ni censo', 'wallet_not_in_census'],
+  ['Token sin datos en BSC', 'no_bsc_market_data'],
+]);
+export function sanitize(value) {
+  if (Array.isArray(value)) return value.map(sanitize);
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) { if (DROP_KEYS.has(k)) continue; out[k] = sanitize(v); }
+    return out;
+  }
+  if (typeof value === 'string') {
+    for (const [es, en] of EN) if (value.includes(es)) value = value.split(es).join(en);
+    return value.replace(PROVIDER_RE, 'external source');
+  }
+  return value;
+}
+
 // ---- run: argv → { exitCode, output } (no process side effects; used by tests) ----
 export async function run(argv, deps = {}) {
   const parsed = parseArgs(argv);
@@ -167,7 +194,7 @@ export async function run(argv, deps = {}) {
   try { url = buildUrl(parsed.command, parsed); }
   catch (e) { return { exitCode: e.exitCode || 1, output: { ok: false, error: e.message, status: null } }; }
   const { exitCode, ...output } = await call(url, deps);
-  return { exitCode, output };
+  return { exitCode, output: sanitize(output) };
 }
 
 export { VERSION, BASE_URL, TIMEOUT_MS, CHAIN_ID, HEADERS, WINDOWS, CATS, SORTS, GEM_KINDS, PERIODS, LANGS, UsageError };
@@ -175,6 +202,6 @@ export { VERSION, BASE_URL, TIMEOUT_MS, CHAIN_ID, HEADERS, WINDOWS, CATS, SORTS,
 // ---- CLI dispatch (only when executed directly, not when imported) ----
 if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
   const { exitCode, output } = await run(process.argv.slice(2));
-  console.log(JSON.stringify(output, null, 2));
-  process.exit(exitCode);
+  // write + exit in the callback: a plain console.log + process.exit truncates piped output at 64 KB (seen with `radar`)
+  process.stdout.write(JSON.stringify(output, null, 2) + '\n', () => process.exit(exitCode));
 }

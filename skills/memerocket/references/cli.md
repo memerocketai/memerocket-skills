@@ -89,7 +89,7 @@ node <skill-dir>/scripts/cli.mjs score 0x000000000000000000000000000000000000000
 Token without market data on BSC (real output, exit `1`):
 
 ```json
-{ "ok": false, "error": "Token sin datos en BSC", "status": 422 }
+{ "ok": false, "error": "no_bsc_market_data", "status": 422 }
 ```
 
 ---
@@ -284,7 +284,7 @@ node <skill-dir>/scripts/cli.mjs wallet 0x00000000000000000000000000000000000000
 Wallet with no trades in the census (real output, exit `1`):
 
 ```json
-{ "ok": false, "error": "wallet sin operaciones ni censo", "status": 404 }
+{ "ok": false, "error": "wallet_not_in_census", "status": 404 }
 ```
 
 ---
@@ -595,7 +595,7 @@ Upstream errors (exit `1`):
 
 ```json
 { "ok": false, "error": "no_score", "status": 404 }
-{ "ok": false, "error": "Token sin datos en BSC", "status": 422 }
+{ "ok": false, "error": "no_bsc_market_data", "status": 422 }
 { "ok": false, "error": "rate_limited", "status": 429, "retryAfterSec": 60 }
 { "ok": false, "error": "upstream_error", "status": 502 }
 ```

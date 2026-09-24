@@ -16,7 +16,7 @@ All endpoints were verified with `curl -s -m 15` on 2026-09-23; the HTTP status 
 | `score` | `GET /score/{address}` | 200 / 404 / 422 | `lang=en\|es\|zh\|pt` | Score cached 2 min per token; 60 req/min per IP |
 | `token` | `GET /token/{address}` | 200 | `lang=…` | Unknown address → `200` with `pair: null`, `score: null` |
 | `league` | `GET /core/league` | 200 | `window=7d\|30d\|90d` · `cat=all\|kol\|smart\|whale\|arbiter` · `sort=pnl\|winrate\|copiers\|earned` · `limit=1..100` · `cursor=N` | Invalid values fall back to defaults (`7d`, `all`, `pnl`) |
-| `wallet` | `GET /core/wallet/{address}` | 200 / 404 | — | `404 {"error":"wallet sin operaciones ni censo"}` when unknown |
+| `wallet` | `GET /core/wallet/{address}` | 200 / 404 | — | `404 {"error":"wallet_not_in_census (normalized by the CLI)"}` when unknown |
 | `copy-targets` | `GET /copy/targets` | 200 | `limit=1..150` | Refreshed every few minutes (`updated_at`) |
 | `copyable` | `GET /copy/target/{address}` | 200 | — | Unknown address → `200` with `in_census: false` |
 | `radar` | `GET /radar` | 200 | `limit=1..100` · `token=0x…` | Scan runs every 10 min (`scan.every_s`) |
@@ -81,8 +81,8 @@ are capped globally and per IP (`503 {"error":"sse_full"}` when full) and are ou
 | 400 | `{"error":"ruta inválida"}` / `{"error":"bad_date"}` | Malformed sub-route under `/core/` or `/survival/day/` |
 | 404 | `{"error":"not found"}` | Unknown route or malformed address |
 | 404 | `{"error":"no_score","address":"0x…"}` | Token has no Score (no pair, no data); cached 2 min |
-| 404 | `{"error":"wallet sin operaciones ni censo","wallet":"0x…"}` | Wallet unknown to the census |
-| 422 | `{"error":"Token sin datos en BSC"}` | Score could not be computed for the address |
+| 404 | `{"error":"wallet_not_in_census (normalized by the CLI)","wallet":"0x…"}` | Wallet unknown to the census |
+| 422 | `{"error":"no_bsc_market_data (normalized by the CLI)"}` | Score could not be computed for the address |
 | 429 | `{"error":"rate_limited","retryAfterSec":60}` | Quota exceeded |
 | 500 | `{"error":"…"}` | Gateway failure (message is truncated free text) |
 | 503 | `{"error":"sse_full"}` | Stream capacity reached (streams only) |

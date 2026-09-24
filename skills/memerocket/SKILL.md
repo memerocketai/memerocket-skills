@@ -83,7 +83,7 @@ node scripts/cli.mjs
   score <token> [--chain 56] [--lang en|es|zh|pt]   # MemeRocket Score 0-100, grade A-F, factors, verdict
   token <token>                                     # token sheet
   league [--window 7d|30d|90d] [--cat all|kol|smart|whale|arbiter]
-         [--sort pnl|winrate|copiers|earned] [--limit 20] [--cursor 0]
+         [--sort total|pnl|winrate|copiers|earned] [--limit 20] [--cursor 0]
   wallet <address>                                  # wallet profile
   copy-targets [--limit 20]                         # wallets passing the copy filters (max 150)
   copyable <address>                                # copyability of one wallet
@@ -149,12 +149,14 @@ sell recommendation and a high grade does not mean a token is safe.
   `binance-agentic-wallet`.
 - **Rate limit on `score`**: 60 requests per minute per IP; the gateway caches each token's Score for
   2 minutes. On `429` the envelope carries `retryAfterSec` — wait, do not retry in a loop.
-- **Stable keys, localized text.** Use `key`, `code`, `level`, `verdict_key` and numeric fields for logic.
-  Free-text fields (`label`, `verdict`, `reasons` strings, error messages) are localized (`--lang`) or may be
-  in Spanish; never parse them.
-- **`league` coverage is partial by design.** `coverage.scope` says it: PnL is measured only on the tokens
-  MemeRocket watches, from the moment it started watching them. `coverage.degraded: true` means the window
-  asked for is longer than the data kept. `pnl.usd` is realized; `pnl.unrealized_usd` is open.
+- **Stable keys, English labels.** Use `key`, `code`, `level`, `verdict_key` and numeric fields for logic.
+  Free-text fields (`label`, `verdict`, `reasons` strings) are for display; the CLI normalizes the gateway's
+  labels to English and removes internal provenance (which upstream sources or nodes fed a number). What you
+  get is MemeRocket's own measurement; never parse free text.
+- **`league` coverage is declared, not assumed.** `coverage.scope` says what was measured and since when;
+  `coverage.degraded: true` means the window asked for is longer than the data kept. `pnl.usd` is realized
+  (FIFO on closed positions), `pnl.unrealized_usd` is open at live price, `pnl.total_usd` is the sum and the
+  default sort (`--sort total`). Other leaderboards mix these differently; compare like with like.
 - **Copyability is a set of filters, not an endorsement.** `copyable: true` means the wallet passes the
   seven blocking filters (`category`, `machine_tags`, `wash`, `contract`, `no_activity`, `self`, `funded`).
   `warnings[]` (e.g. `low_weight`, `losing_30d`, `bundler`, `inactive`, `relay`) do not block but must be
@@ -174,8 +176,8 @@ never show raw codes.
 |----------|---------|---------|---------------------|
 | `null` | usage text | Bad arguments (address, enum, range, unknown command) | Fix the argument; nothing was requested |
 | 404 | `no_score` / `not found` | No Score for this token, or route not found | No score is available for this token |
-| 404 | `wallet sin operaciones ni censo` | Wallet has no trades in the census | No on-chain activity is recorded for this wallet |
-| 422 | `Token sin datos en BSC` | Token has no market data on BSC | This token has no market data on BNB Chain |
+| 404 | `wallet_not_in_census` | Wallet has no trades in the census | No on-chain activity is recorded for this wallet |
+| 422 | `no_bsc_market_data` | Token has no market data on BSC | This token has no market data on BNB Chain |
 | 429 | `rate_limited` | Per-IP quota exceeded (`retryAfterSec`) | Please wait a minute and try again |
 | 5xx | `upstream_error` / body error | Gateway error | The service is temporarily unavailable |
 | 0 | `network_error` / `timeout` | No connection or > 20 s | Could not reach the service |
@@ -195,7 +197,7 @@ Risk: holders {risk.holders} · top-10 {risk.top10_pct}% · LP locked {risk.lp_l
 **League row**
 
 ```
-#{rank} {alias} [{cat}] · PnL {pnl.usd} USD ({pnl.pct}%) · win rate {winrate}% · trades {trades} · tokens {tokens} · streak {streak}
+#{rank} {alias} [{cat}] · PnL {pnl.total_usd} USD (realized {pnl.usd} · open {pnl.unrealized_usd}) · win rate {winrate}% · trades {trades} · streak {streak}
 ```
 
 **Copyability**

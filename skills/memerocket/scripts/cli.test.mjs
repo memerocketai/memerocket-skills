@@ -1,7 +1,7 @@
 // Unit tests for the memerocket skill CLI. No network: fetch is always mocked.
 // Run: npx vitest run --config /dev/null integrations/binance-skills-hub
 import { describe, it, expect } from 'vitest';
-import { parseArgs, buildUrl, mapError, call, run, COMMANDS, BASE_URL, HEADERS, VERSION } from './cli.mjs';
+import { sanitize, parseArgs, buildUrl, mapError, call, run, COMMANDS, BASE_URL, HEADERS, VERSION } from './cli.mjs';
 
 const ZERO = '0x0000000000000000000000000000000000000000';
 const url = (argv) => { const p = parseArgs(argv); return buildUrl(p.command, p); };
@@ -48,7 +48,7 @@ describe('buildUrl', () => {
     expect(url(['copyable', ZERO])).toBe(`${BASE_URL}/copy/target/${ZERO}`);
   });
   it('league: defaults, explicit options, and validation of enums / ranges', () => {
-    expect(url(['league'])).toBe(`${BASE_URL}/core/league?window=7d&cat=all&sort=pnl&limit=20`);
+    expect(url(['league'])).toBe(`${BASE_URL}/core/league?window=7d&cat=all&sort=total&limit=20`);
     expect(url(['league', '--window', '30d', '--cat', 'kol', '--sort', 'winrate', '--limit', '5', '--cursor', '10']))
       .toBe(`${BASE_URL}/core/league?window=30d&cat=kol&sort=winrate&limit=5&cursor=10`);
     expect(() => url(['league', '--window', '1d'])).toThrow(/--window/);
@@ -150,6 +150,21 @@ describe('run', () => {
   });
   it('propagates upstream errors as { ok: false, error, status }', async () => {
     const r = await run(['wallet', ZERO], { fetchImpl: mockFetch(404, { error: 'wallet sin operaciones ni censo', wallet: ZERO }) });
-    expect(r).toEqual({ exitCode: 1, output: { ok: false, error: 'wallet sin operaciones ni censo', status: 404 } });
+    expect(r).toEqual({ exitCode: 1, output: { ok: false, error: 'wallet_not_in_census', status: 404 } }); // upstream Spanish text is normalized to a stable code
+  });
+});
+
+
+describe('output hygiene: no upstream provider names, stable English labels', () => {
+  it('drops provenance keys and scrubs provider names inside strings, recursively', () => {
+    const out = sanitize({ score: 70, sources: [{ name: 'x' }], risk: { rpc: { primary: 'p' }, note: 'checked via goplus and GMGN' }, rows: [{ providers: ['a'], label: 'medido por nosotros en cadena' }] });
+    expect(out).toEqual({ score: 70, risk: { note: 'checked via external source and external source' }, rows: [{ label: 'measured by MemeRocket on-chain' }] });
+  });
+  it('normalizes the known Spanish labels and error strings', () => {
+    expect(sanitize('según el motor de flujo, sin verificar')).toBe('from the flow engine, unverified');
+    expect(sanitize({ error: 'Token sin datos en BSC' })).toEqual({ error: 'no_bsc_market_data' });
+  });
+  it('leaves numbers, booleans and unknown strings untouched', () => {
+    expect(sanitize({ a: 1, b: true, c: 'BNB pair', d: null })).toEqual({ a: 1, b: true, c: 'BNB pair', d: null });
   });
 });
